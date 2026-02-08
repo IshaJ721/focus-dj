@@ -696,9 +696,11 @@ async function tick() {
   // Skip intervention if alarm was just triggered (avoid double-action)
   const recentAlarm = (now - lastDoomscrollAlarm < 10000) || (now - lastFaceAwayAlarm < 10000);
 
-  if (musicAvailable && !recentAlarm) {
-    const interventionCheck = shouldIntervene(state, now);
+  // Log intervention check status
+  const interventionCheck = shouldIntervene(state, now);
+  console.log(`[Tick] Focus: ${focusScore}, Music: ${musicAvailable}, RecentAlarm: ${recentAlarm}, ShouldIntervene: ${interventionCheck.should} (${interventionCheck.reason})`);
 
+  if (musicAvailable && !recentAlarm) {
     if (interventionCheck.should) {
       // Use the doomscrolling detection from activity tracker
       const isDoomscrolling = state.signals.isDoomscrolling ||

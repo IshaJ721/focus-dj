@@ -28,8 +28,8 @@ async function loadSettings() {
 
   // Auto Music Switch
   $('auto-music-switch').checked = settings.autoMusicSwitch !== false;
-  $('auto-music-threshold').value = settings.autoMusicThreshold || 50;
-  $('threshold-value').textContent = settings.autoMusicThreshold || 50;
+  $('auto-music-threshold').value = settings.autoMusicThreshold || 70;
+  $('threshold-value').textContent = settings.autoMusicThreshold || 70;
 
   // Genre Preferences
   const preferredGenres = settings.preferredGenres || [];

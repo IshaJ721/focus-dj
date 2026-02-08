@@ -137,13 +137,12 @@ export function selectIntervention(state, isDoomscrolling) {
   }
 
   // AUTO MUSIC SWITCH: If enabled and focus is below threshold, use smart recommend
-  // BUT: Skip if user is actively on a bad site (doomscrolling) - let alarm handle it
   const autoMusicEnabled = settings.autoMusicSwitch !== false; // Default true
-  const autoThreshold = settings.autoMusicThreshold || 50;
-  const onBadSite = isDoomscrolling || ['socialMedia', 'entertainment', 'games', 'blocked'].includes(state.signals?.currentCategory);
+  const autoThreshold = settings.autoMusicThreshold || 70; // Higher = more sensitive
 
-  if (autoMusicEnabled && state.metrics.focusScore < autoThreshold && !onBadSite) {
-    // Prioritize music switching when focus is low and user is not actively doomscrolling
+  if (autoMusicEnabled && state.metrics.focusScore < autoThreshold) {
+    // Always use smart recommend when focus drops - music helps refocus
+    console.log(`[Decision] Auto music switch: focus ${state.metrics.focusScore} < threshold ${autoThreshold}`);
     return INTERVENTIONS.SMART_RECOMMEND;
   }
 

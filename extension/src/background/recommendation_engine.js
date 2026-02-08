@@ -544,81 +544,79 @@ async function getUserPreferredGenres() {
 
 /**
  * Get contextual recommendation for current focus state
+ * PRIORITIZES user's preferred genres
  */
 export async function getContextualRecommendation(focusScore, currentTrack) {
   const state = await loadState();
-  const profile = await buildUserProfile();
   const recentlyRecommended = await getRecentlyRecommended();
   const userGenres = state.settings?.preferredGenres || [];
 
-  // If focus is low, target higher BPM
-  let targetBpmRange = profile.optimalBpmRange || 'moderate';
-  if (focusScore < 50) {
-    const ranges = ['slow', 'moderate', 'upbeat', 'fast'];
-    const currentIdx = ranges.indexOf(targetBpmRange);
-    if (currentIdx < ranges.length - 1) {
-      targetBpmRange = ranges[currentIdx + 1];
-    }
-  }
+  console.log('[Recommendation] User preferred genres:', userGenres);
+  console.log('[Recommendation] Recently recommended:', recentlyRecommended.length, 'tracks');
 
-  // Build recommendation pool
-  let recommendations = await getRecommendations(30);
+  // Build recommendation pool - PRIORITIZE user's preferred genres
+  let recommendations = [];
 
-  // Add genre-specific defaults based on user preferences
+  // If user has preferred genres, use ONLY those
   if (userGenres.length > 0) {
+    console.log('[Recommendation] Using user preferred genres:', userGenres.join(', '));
     for (const genre of userGenres) {
-      const genreMusic = DEFAULT_FOCUS_MUSIC_BY_GENRE[genre.toLowerCase()];
+      const genreKey = genre.toLowerCase();
+      const genreMusic = DEFAULT_FOCUS_MUSIC_BY_GENRE[genreKey];
       if (genreMusic) {
-        recommendations = [...recommendations, ...genreMusic.map(m => ({
+        recommendations.push(...genreMusic.map(m => ({
           ...m,
-          reason: `Matches your ${genre} preference`,
-          source: 'genre_preference',
-          confidence: 0.8,
-        }))];
+          reason: `From your ${genre} preference`,
+          source: 'user_preference',
+          genre: genreKey,
+        })));
       }
     }
   }
 
-  // If still no recommendations, use all defaults
-  if (!recommendations || recommendations.length === 0) {
-    console.log('[Recommendation Engine] Using default recommendations');
+  // If no user preferences or no matches, use all defaults
+  if (recommendations.length === 0) {
+    console.log('[Recommendation] No user preferences, using all genres');
     recommendations = ALL_DEFAULT_MUSIC.map(m => ({
       ...m,
-      reason: 'Focus music recommendation',
+      reason: 'Focus music',
       source: 'default',
-      confidence: 0.5,
     }));
   }
 
-  // Shuffle for variety
+  console.log('[Recommendation] Total pool:', recommendations.length, 'tracks');
+
+  // Shuffle for variety (Fisher-Yates)
   for (let i = recommendations.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [recommendations[i], recommendations[j]] = [recommendations[j], recommendations[i]];
   }
 
   // Filter out recently recommended (avoid repeats)
-  const notRecent = recommendations.filter(rec =>
-    !recentlyRecommended.includes(rec.searchQuery)
+  let candidates = recommendations.filter(rec =>
+    !recentlyRecommended.some(recent =>
+      recent === rec.searchQuery ||
+      recent?.toLowerCase().includes(rec.title?.toLowerCase())
+    )
   );
 
-  // Filter to target BPM range (but keep some variety)
-  const bpmFiltered = notRecent.filter(rec => {
-    if (!rec.estimatedBpm) return true;
-    return getBpmRange(rec.estimatedBpm) === targetBpmRange;
-  });
+  console.log('[Recommendation] After filtering recent:', candidates.length, 'candidates');
 
   // Exclude current track
-  const candidates = (bpmFiltered.length > 0 ? bpmFiltered : notRecent).filter(rec =>
-    rec.title?.toLowerCase() !== currentTrack?.title?.toLowerCase() &&
-    rec.searchQuery?.toLowerCase() !== currentTrack?.title?.toLowerCase()
-  );
+  if (currentTrack?.title) {
+    candidates = candidates.filter(rec =>
+      !rec.title?.toLowerCase().includes(currentTrack.title.toLowerCase()) &&
+      !rec.searchQuery?.toLowerCase().includes(currentTrack.title.toLowerCase())
+    );
+  }
 
-  // Pick a result (prefer candidates, fallback to any not-recent, then any)
-  let result = candidates[0] || notRecent[0] || recommendations[0];
-
-  // If we've exhausted all options, clear recently recommended and pick random
-  if (!result || recentlyRecommended.includes(result?.searchQuery)) {
-    console.log('[Recommendation Engine] Clearing recently recommended, starting fresh');
+  // Pick a random result from candidates
+  let result;
+  if (candidates.length > 0) {
+    result = candidates[Math.floor(Math.random() * candidates.length)];
+  } else {
+    // All tracks were recently played, clear history and pick random
+    console.log('[Recommendation] All tracks recently played, clearing history');
     await updateState(s => ({
       ...s,
       music: { ...s.music, recentlyRecommended: [] },
