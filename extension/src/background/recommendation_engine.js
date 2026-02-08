@@ -6,15 +6,21 @@ import { lookupBpm, getBpmRange, getBpmRangeCenter } from './bpm_lookup.js';
 const CACHE_TTL_MS = 3600000; // 1 hour
 const TRACK_HISTORY_MAX = 500;
 
+// Default API keys (fallback if not configured in options)
+const DEFAULT_API_KEYS = {
+  groq: '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',
+  serp: null,
+};
+
 /**
- * Get API key from chrome storage
+ * Get API key from chrome storage (with fallback to defaults)
  */
 async function getApiKey(keyType) {
   try {
     const result = await chrome.storage.local.get(`apiKey_${keyType}`);
-    return result[`apiKey_${keyType}`] || null;
+    return result[`apiKey_${keyType}`] || DEFAULT_API_KEYS[keyType] || null;
   } catch (e) {
-    return null;
+    return DEFAULT_API_KEYS[keyType] || null;
   }
 }
 
