@@ -393,6 +393,39 @@ elements.toggleNuclear.addEventListener('click', async () => {
   elements.nuclearStatus.textContent = `Nuclear: ${newValue ? 'On' : 'Off'}`;
 });
 
+// Test AI Music Recommendation
+const testRecommendBtn = document.getElementById('test-recommend');
+testRecommendBtn?.addEventListener('click', async () => {
+  testRecommendBtn.textContent = 'Testing...';
+  testRecommendBtn.disabled = true;
+
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'TEST_SMART_RECOMMEND' });
+    console.log('Test smart recommend result:', result);
+
+    if (result.success) {
+      elements.interventionSection.classList.remove('hidden');
+      elements.lastIntervention.textContent = 'AI recommended a new track!';
+      setTimeout(() => elements.interventionSection.classList.add('hidden'), 5000);
+    } else {
+      alert('Failed: ' + (result.error || 'Unknown error. Make sure YouTube Music is open.'));
+    }
+  } catch (err) {
+    console.error('Test smart recommend error:', err);
+    alert('Error: ' + err.message);
+  }
+
+  testRecommendBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="5.5" cy="17.5" r="2.5"/>
+      <circle cx="17.5" cy="15.5" r="2.5"/>
+      <path d="M8 17V5l12-2v12"/>
+    </svg>
+    <span>Test AI</span>
+  `;
+  testRecommendBtn.disabled = false;
+});
+
 // ============================================================
 // Message handling
 // ============================================================

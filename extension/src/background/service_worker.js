@@ -1082,6 +1082,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         break;
 
+      case 'TEST_SMART_RECOMMEND':
+        // Manual test trigger for smart music recommendation
+        try {
+          console.log('[Test] Triggering smart recommendation manually');
+          const musicAvailable = await isYTMusicAvailable();
+          if (!musicAvailable) {
+            sendResponse({ success: false, error: 'YouTube Music tab not open' });
+            break;
+          }
+
+          const result = await applyIntervention('SMART_RECOMMEND');
+          console.log('[Test] Smart recommend result:', result);
+          sendResponse({
+            success: result?.success || false,
+            result,
+          });
+        } catch (err) {
+          console.error('[Test] Smart recommend error:', err);
+          sendResponse({ success: false, error: err.message });
+        }
+        break;
+
       default:
         sendResponse({ error: 'Unknown message type' });
     }

@@ -452,6 +452,20 @@ function mergeRecommendations(recommendations, profile) {
   return unique.sort((a, b) => b.score - a.score);
 }
 
+// Default focus music recommendations (used when no track history exists)
+const DEFAULT_FOCUS_MUSIC = [
+  { title: 'lofi hip hop radio', artist: 'Lofi Girl', reason: 'Popular focus music', estimatedBpm: 85, searchQuery: 'lofi hip hop radio beats to study' },
+  { title: 'Deep Focus', artist: 'Spotify', reason: 'Ambient focus music', estimatedBpm: 90, searchQuery: 'deep focus ambient music for concentration' },
+  { title: 'Chillhop Essentials', artist: 'Chillhop Music', reason: 'Chill study beats', estimatedBpm: 80, searchQuery: 'chillhop essentials study beats' },
+  { title: 'Brain Food', artist: 'Various', reason: 'Instrumental focus tracks', estimatedBpm: 100, searchQuery: 'brain food instrumental focus music' },
+  { title: 'Coding Mode', artist: 'Various', reason: 'Programming focus music', estimatedBpm: 110, searchQuery: 'coding programming music focus' },
+  { title: 'Jazz for Study', artist: 'Various', reason: 'Jazz focus music', estimatedBpm: 95, searchQuery: 'jazz music for studying concentration' },
+  { title: 'Classical Focus', artist: 'Various', reason: 'Classical study music', estimatedBpm: 80, searchQuery: 'classical music for focus and concentration' },
+  { title: 'Electronic Focus', artist: 'Various', reason: 'Upbeat focus music', estimatedBpm: 120, searchQuery: 'electronic focus music for work' },
+  { title: 'Synthwave Focus', artist: 'Various', reason: 'Retro focus vibes', estimatedBpm: 115, searchQuery: 'synthwave focus music for productivity' },
+  { title: 'Nature Sounds Focus', artist: 'Various', reason: 'Calm ambient sounds', estimatedBpm: 70, searchQuery: 'nature sounds with music for focus' },
+];
+
 /**
  * Get contextual recommendation for current focus state
  */
@@ -468,7 +482,19 @@ export async function getContextualRecommendation(focusScore, currentTrack) {
     }
   }
 
-  const recommendations = await getRecommendations(20);
+  let recommendations = await getRecommendations(20);
+
+  // If no recommendations from history/AI, use defaults
+  if (!recommendations || recommendations.length === 0) {
+    console.log('[Recommendation Engine] No personalized recommendations, using defaults');
+    recommendations = [...DEFAULT_FOCUS_MUSIC];
+
+    // Shuffle the defaults to add variety
+    for (let i = recommendations.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [recommendations[i], recommendations[j]] = [recommendations[j], recommendations[i]];
+    }
+  }
 
   // Filter to target BPM range
   const filtered = recommendations.filter(rec => {
@@ -481,7 +507,10 @@ export async function getContextualRecommendation(focusScore, currentTrack) {
     rec.title?.toLowerCase() !== currentTrack?.title?.toLowerCase()
   );
 
-  return candidates[0] || recommendations[0] || null;
+  const result = candidates[0] || recommendations[0] || DEFAULT_FOCUS_MUSIC[0];
+  console.log('[Recommendation Engine] Selected recommendation:', result?.title, 'Query:', result?.searchQuery);
+
+  return result;
 }
 
 /**
