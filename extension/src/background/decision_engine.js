@@ -113,7 +113,7 @@ export function selectArmUCB(policy, excludeNuclear = true) {
  * Escalates if previous interventions didn't work
  */
 export function selectIntervention(state, isDoomscrolling) {
-  const { session, policy, settings, lastIntervention } = state;
+  const { session, policy, settings, lastIntervention, signals } = state;
 
   // Check if we're escalating (previous intervention didn't help)
   const isEscalating = lastIntervention &&
@@ -121,9 +121,25 @@ export function selectIntervention(state, isDoomscrolling) {
     lastIntervention.type !== INTERVENTIONS.VIOLA_POPUP &&
     lastIntervention.type !== INTERVENTIONS.NUCLEAR;
 
+  // Check if on unproductive site
+  const onUnproductiveSite = ['socialMedia', 'entertainment', 'games', 'blocked'].includes(signals?.currentCategory);
+
   // Nuclear only for doomscrolling in strict mode with it enabled
   if (isDoomscrolling && session.mode === 'strict' && settings.nuclearEnabled) {
     return INTERVENTIONS.NUCLEAR;
+  }
+
+  // VIOLA POPUP: Show on unproductive sites when focus is low
+  // This is the "hey, you're distracted" nudge
+  if (onUnproductiveSite && state.metrics.focusScore < 60) {
+    // Don't spam - check if we showed popup recently
+    const recentPopup = lastIntervention?.type === INTERVENTIONS.VIOLA_POPUP &&
+      (Date.now() - lastIntervention.appliedAt < 120000); // 2 min cooldown for popup
+
+    if (!recentPopup) {
+      console.log(`[Decision] Viola popup: on ${signals?.currentCategory} site, focus ${state.metrics.focusScore}`);
+      return INTERVENTIONS.VIOLA_POPUP;
+    }
   }
 
   // If escalating and still distracted, show Viola popup

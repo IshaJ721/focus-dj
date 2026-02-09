@@ -186,23 +186,194 @@ async function handleTabChange(newUrl) {
 async function showViolaPopup(messageType, customMessage = null, focusScore = null) {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tabs[0] && !tabs[0].url.includes('music.youtube.com')) {
-      const messages = VIOLA_MESSAGES[messageType] || VIOLA_MESSAGES.stillDistracted;
-      const message = customMessage || messages[Math.floor(Math.random() * messages.length)];
+    const tab = tabs[0];
 
-      await chrome.tabs.sendMessage(tabs[0].id, {
-        type: 'VIOLA_POPUP',
-        message,
-        alertType: messageType,
-        focusScore,
-        actionLabel: messageType === 'breakTime' ? 'Start Break' : "Let's Focus",
-      });
-      return { success: true };
+    // Skip if no tab, or it's a special page (chrome://, music.youtube.com, etc.)
+    if (!tab || !tab.url) {
+      console.log('[Viola] No active tab');
+      return { success: false, error: 'No active tab' };
     }
+
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') ||
+        tab.url.startsWith('about:') || tab.url.includes('music.youtube.com')) {
+      console.log('[Viola] Skipping special page:', tab.url);
+      return { success: false, error: 'Cannot show on this page type' };
+    }
+
+    const messages = VIOLA_MESSAGES[messageType] || VIOLA_MESSAGES.stillDistracted;
+    const message = customMessage || messages[Math.floor(Math.random() * messages.length)];
+    const actionLabel = messageType === 'breakTime' ? 'Start Break' : "Let's Focus";
+
+    // Directly inject and show the popup
+    console.log('[Viola] Injecting popup on tab:', tab.id, tab.url);
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: injectViolaPopup,
+      args: [message, messageType, focusScore, actionLabel],
+    });
+
+    console.log('[Viola] Popup injected successfully');
+    return { success: true };
   } catch (err) {
-    console.warn('Failed to show Viola popup:', err);
+    console.warn('[Viola] Failed to show popup:', err.message);
+    return { success: false, error: err.message };
   }
-  return { success: false };
+}
+
+/**
+ * This function is injected into the page to show the popup
+ */
+function injectViolaPopup(message, alertType, focusScore, actionLabel) {
+  // Remove existing popup if any
+  const existing = document.getElementById('focusdj-viola-popup');
+  if (existing) existing.remove();
+
+  const container = document.createElement('div');
+  container.id = 'focusdj-viola-popup';
+  container.innerHTML = `
+    <style>
+      #focusdj-viola-popup {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 2147483647;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        animation: violaSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes violaSlideIn {
+        from { opacity: 0; transform: translateY(16px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .viola-card {
+        background: rgba(15, 15, 20, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 14px;
+        width: 280px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      }
+      .viola-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .viola-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ff6b9d, #a855f7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .viola-avatar svg {
+        width: 16px;
+        height: 16px;
+        fill: white;
+      }
+      .viola-title {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+      }
+      .viola-close {
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.4);
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        transition: all 0.15s;
+      }
+      .viola-close:hover {
+        background: rgba(255,255,255,0.1);
+        color: #fff;
+      }
+      .viola-body {
+        font-size: 13px;
+        color: rgba(255,255,255,0.7);
+        line-height: 1.5;
+        margin-bottom: 12px;
+      }
+      .viola-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .viola-btn {
+        flex: 1;
+        padding: 8px 12px;
+        border: none;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .viola-btn-primary {
+        background: linear-gradient(135deg, #ff6b9d, #a855f7);
+        color: white;
+      }
+      .viola-btn-primary:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+      }
+      .viola-btn-secondary {
+        background: rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.7);
+      }
+      .viola-btn-secondary:hover {
+        background: rgba(255,255,255,0.12);
+        color: #fff;
+      }
+    </style>
+    <div class="viola-card">
+      <div class="viola-header">
+        <div class="viola-avatar">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        </div>
+        <span class="viola-title">FocusDJ</span>
+        <button class="viola-close" id="viola-close-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="viola-body">${message}</div>
+      <div class="viola-actions">
+        <button class="viola-btn viola-btn-secondary" id="viola-dismiss-btn">Dismiss</button>
+        <button class="viola-btn viola-btn-primary" id="viola-action-btn">${actionLabel}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  const closePopup = () => {
+    container.style.opacity = '0';
+    container.style.transform = 'translateY(10px)';
+    container.style.transition = 'all 0.2s ease';
+    setTimeout(() => container.remove(), 200);
+  };
+
+  document.getElementById('viola-close-btn').onclick = closePopup;
+  document.getElementById('viola-dismiss-btn').onclick = closePopup;
+  document.getElementById('viola-action-btn').onclick = () => {
+    closePopup();
+    // Tell extension to find a productive tab
+    chrome.runtime.sendMessage({ type: 'FIND_PRODUCTIVE_TAB' });
+  };
+
+  setTimeout(closePopup, 12000);
 }
 
 /**
@@ -698,22 +869,35 @@ async function tick() {
 
   // Log intervention check status
   const interventionCheck = shouldIntervene(state, now);
-  console.log(`[Tick] Focus: ${focusScore}, Music: ${musicAvailable}, RecentAlarm: ${recentAlarm}, ShouldIntervene: ${interventionCheck.should} (${interventionCheck.reason})`);
+  console.log(`[Tick] Focus: ${focusScore}, Site: ${state.signals.currentCategory}, Music: ${musicAvailable}, RecentAlarm: ${recentAlarm}, ShouldIntervene: ${interventionCheck.should} (${interventionCheck.reason})`);
 
-  if (musicAvailable && !recentAlarm) {
-    if (interventionCheck.should) {
-      // Use the doomscrolling detection from activity tracker
-      const isDoomscrolling = state.signals.isDoomscrolling ||
-        ['socialMedia', 'entertainment', 'games', 'blocked'].includes(state.signals.currentCategory);
-      const interventionType = selectIntervention(state, isDoomscrolling);
+  if (interventionCheck.should && !recentAlarm) {
+    // Use the doomscrolling detection from activity tracker
+    const isDoomscrolling = state.signals.isDoomscrolling ||
+      ['socialMedia', 'entertainment', 'games', 'blocked'].includes(state.signals.currentCategory);
+    const interventionType = selectIntervention(state, isDoomscrolling);
 
-      console.log(`Intervening: ${interventionType} (reason: ${interventionCheck.reason})`);
+    console.log(`[Tick] Intervening: ${interventionType} (reason: ${interventionCheck.reason})`);
 
-      // Handle Viola popup specially
-      if (interventionType === 'VIOLA_POPUP') {
-        await showViolaPopup('stillDistracted', null, focusScore);
+    // Handle Viola popup specially - doesn't require music
+    if (interventionType === 'VIOLA_POPUP') {
+      // Pick message type based on context
+      let messageType = 'stillDistracted';
+      if (isDoomscrolling) messageType = 'doomscrolling';
+
+      const popupResult = await showViolaPopup(messageType, null, focusScore);
+      console.log(`[Tick] Viola popup result:`, popupResult);
+
+      if (popupResult.success) {
+        state.lastIntervention = {
+          type: interventionType,
+          appliedAt: now,
+          preScore: focusScore,
+        };
       }
-
+    }
+    // Music interventions require music to be available
+    else if (musicAvailable) {
       // Apply the intervention
       const result = await applyIntervention(interventionType);
 
@@ -1083,6 +1267,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const key = await getApiKey(message.keyType);
           sendResponse({ success: true, hasKey: !!key });
         } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+        break;
+
+      case 'TEST_VIOLA_POPUP':
+        // Manual test trigger for Viola popup
+        try {
+          console.log('[Test] Triggering Viola popup manually');
+          const popupResult = await showViolaPopup('stillDistracted', null, 42);
+          console.log('[Test] Viola popup result:', popupResult);
+          sendResponse(popupResult);
+        } catch (err) {
+          console.error('[Test] Viola popup error:', err);
           sendResponse({ success: false, error: err.message });
         }
         break;
